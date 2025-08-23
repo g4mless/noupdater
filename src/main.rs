@@ -93,6 +93,16 @@ impl eframe::App for MyApp {
 }
 
 fn corrupt_wuauserv() -> bool {
+    // stop services first with cmd 😛
+    let _stop_services = std::process::Command::new("cmd")
+        .args(&["/C", "net stop wuauserv"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    // fuck the ImagePath registry value
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     if let Ok((key, _)) = hklm.create_subkey(r"SYSTEM\CurrentControlSet\Services\wuauserv") {
         let new_path = r"C:\WINDOWS\system32\svchostt.exe -k netsvcs -p"; // corrupt
@@ -102,6 +112,13 @@ fn corrupt_wuauserv() -> bool {
 }
 
 fn restore_wuauserv() -> bool {
+    let _start_services = std::process::Command::new("cmd")
+        .args(&["/C", "net start wuauserv"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     if let Ok((key, _)) = hklm.create_subkey(r"SYSTEM\CurrentControlSet\Services\wuauserv") {
         let original_path = r"C:\WINDOWS\system32\svchost.exe -k netsvcs -p"; // restore
