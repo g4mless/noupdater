@@ -11,6 +11,7 @@ ProductName = "UpdateFucker"
 [dependencies]
 eframe = "0.32.1"
 winreg = "0.55"
+ico = "0.4.0"
 
 [build-dependencies]
 winres = "0.1"
