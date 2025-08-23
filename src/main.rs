@@ -5,6 +5,8 @@ use winreg::enums::*;
 use winreg::RegKey;
 use std::io::Cursor;
 use ico::IconDir;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 struct MyApp {
     windows_update_disabled: bool,
@@ -98,6 +100,7 @@ fn corrupt_wuauserv() -> bool {
         .args(&["/C", "net stop wuauserv"])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW flag to hide the command window
         .status()
         .map(|s| s.success())
         .unwrap_or(false);
@@ -112,13 +115,6 @@ fn corrupt_wuauserv() -> bool {
 }
 
 fn restore_wuauserv() -> bool {
-    let _start_services = std::process::Command::new("cmd")
-        .args(&["/C", "net start wuauserv"])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     if let Ok((key, _)) = hklm.create_subkey(r"SYSTEM\CurrentControlSet\Services\wuauserv") {
         let original_path = r"C:\WINDOWS\system32\svchost.exe -k netsvcs -p"; // restore
@@ -131,7 +127,7 @@ fn read_status() -> bool {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     if let Ok(key) = hklm.open_subkey(r"SYSTEM\CurrentControlSet\Services\wuauserv") {
         if let Ok(path) = key.get_value::<String, _>("ImagePath") {
-            return path.contains("svchostt.exe"); // fuck this
+            return path.contains("svchostt.exe"); // fuck(check) this
         }
     }
     false
