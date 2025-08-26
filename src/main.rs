@@ -127,7 +127,7 @@ fn read_status() -> bool {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     if let Ok(key) = hklm.open_subkey(r"SYSTEM\CurrentControlSet\Services\wuauserv") {
         if let Ok(path) = key.get_value::<String, _>("ImagePath") {
-            return path.contains("svchostt.exe"); // fuck(check) this
+            return !path.contains("svchost.exe"); // check this
         }
     }
     false
