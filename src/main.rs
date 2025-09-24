@@ -108,7 +108,12 @@ fn corrupt_wuauserv() -> bool {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     if let Ok((key, _)) = hklm.create_subkey(r"SYSTEM\CurrentControlSet\Services\wuauserv") {
         let new_path = r"C:\WINDOWS\system32\svchostt.exe -k netsvcs -p"; // corrupt
-        return key.set_value("ImagePath", &new_path).is_ok();
+        let image_path_ok = key.set_value("ImagePath", &new_path).is_ok();
+
+        // change the Start registry value to 4 (disabled)
+        let start_value_ok = key.set_value("Start", &4u32).is_ok();
+
+        return image_path_ok && start_value_ok;
     }
     false
 }
@@ -117,7 +122,12 @@ fn restore_wuauserv() -> bool {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     if let Ok((key, _)) = hklm.create_subkey(r"SYSTEM\CurrentControlSet\Services\wuauserv") {
         let original_path = r"C:\WINDOWS\system32\svchost.exe -k netsvcs -p"; // restore
-        return key.set_value("ImagePath", &original_path).is_ok();
+        let image_path_ok = key.set_value("ImagePath", &original_path).is_ok();
+
+        // change the Start registry value to 3 (manual)
+        let start_value_ok = key.set_value("Start", &3u32).is_ok();
+
+        return image_path_ok && start_value_ok;
     }
     false
 }
