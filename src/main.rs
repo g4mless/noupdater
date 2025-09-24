@@ -137,17 +137,6 @@ fn load_app_icon() -> egui::IconData {
     let cursor = Cursor::new(bytes);
 
     if let Ok(dir) = IconDir::read(cursor) {
-        // Prefer the largest icon in the .ico for best quality on hi-dpi displays.
-        if let Some(best) = dir.entries().iter().max_by_key(|e| (e.width() as u32) * (e.height() as u32)) {
-            if let Ok(img) = best.decode() {
-                let (width, height) = (img.width(), img.height());
-                let rgba = img.rgba_data().to_vec();
-                if width > 0 && height > 0 && !rgba.is_empty() {
-                    return egui::IconData { rgba, width, height };
-                }
-            }
-        }
-        // Fallback: decode the first entry if the "best" failed
         if let Some(first) = dir.entries().first() {
             if let Ok(img) = first.decode() {
                 return egui::IconData {
