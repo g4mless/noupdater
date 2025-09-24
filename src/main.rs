@@ -135,21 +135,16 @@ fn read_status() -> bool {
 fn load_app_icon() -> egui::IconData {
     let bytes: &[u8] = include_bytes!("../icon.ico");
     let cursor = Cursor::new(bytes);
-
-    if let Ok(dir) = IconDir::read(cursor) {
-        if let Some(first) = dir.entries().first() {
-            if let Ok(img) = first.decode() {
-                return egui::IconData {
-                    rgba: img.rgba_data().to_vec(),
-                    width: img.width(),
-                    height: img.height(),
-                };
-            }
-        }
+    
+    let dir = IconDir::read(cursor).expect("Failed to read icon directory");
+    let first = dir.entries().first().expect("No icon entries found");
+    let img = first.decode().expect("Failed to decode icon");
+    
+    egui::IconData {
+        rgba: img.rgba_data().to_vec(),
+        width: img.width(),
+        height: img.height(),
     }
-
-    // Final fallback: a 1x1 transparent pixel to keep the icon
-    egui::IconData { rgba: vec![0, 0, 0, 0], width: 1, height: 1 }
 }
 
 fn main() -> eframe::Result<()> {
