@@ -16,7 +16,7 @@ struct MyApp {
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Update Fucker");
+            ui.heading("NoUpdater");
             ui.add_space(10.0);
 
             let mut toggle_clicked = false;
@@ -55,9 +55,9 @@ impl eframe::App for MyApp {
                 
                 // Add labels for the toggle states
                 if self.windows_update_disabled {
-                    ui.label(egui::RichText::new("Fucked (Disabled)").color(egui::Color32::from_rgb(40, 167, 69)));
+                    ui.label(egui::RichText::new("Disabled").color(egui::Color32::from_rgb(40, 167, 69)));
                 } else {
-                    ui.label(egui::RichText::new("Not Fucked (Running)").color(egui::Color32::from_rgb(220, 53, 69)));
+                    ui.label(egui::RichText::new("Running").color(egui::Color32::from_rgb(220, 53, 69)));
                 }
             });
 
@@ -66,7 +66,7 @@ impl eframe::App for MyApp {
                 let target_state = !self.windows_update_disabled;
                 
                 if target_state {
-                    // Trying to fuck Windows Update
+                    // Trying to disable Windows Update
                     if corrupt_wuauserv() {
                         self.windows_update_disabled = true;
                         self.status_message = "Windows Update disabled".to_string();
@@ -75,7 +75,6 @@ impl eframe::App for MyApp {
                     }
                 } else {
                     // Trying to restore Windows Update
-                    // (why should restore this asshole service that took a lot of my data package when i hotspot my laptop)
                     if restore_wuauserv() {
                         self.windows_update_disabled = false;
                         self.status_message = "Windows Update restored".to_string();
@@ -105,7 +104,7 @@ fn corrupt_wuauserv() -> bool {
         .map(|s| s.success())
         .unwrap_or(false);
 
-    // fuck the ImagePath registry value
+    // change the ImagePath registry value
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     if let Ok((key, _)) = hklm.create_subkey(r"SYSTEM\CurrentControlSet\Services\wuauserv") {
         let new_path = r"C:\WINDOWS\system32\svchostt.exe -k netsvcs -p"; // corrupt
@@ -127,14 +126,13 @@ fn read_status() -> bool {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     if let Ok(key) = hklm.open_subkey(r"SYSTEM\CurrentControlSet\Services\wuauserv") {
         if let Ok(path) = key.get_value::<String, _>("ImagePath") {
-            return !path.contains("svchost.exe"); // check this
+            return !path.contains("svchost.exe");
         }
     }
     false
 }
 
 fn load_app_icon() -> egui::IconData {
-    // Embed the icon at compile time so it works in release without relying on the working dir.
     let bytes: &[u8] = include_bytes!("../icon.ico");
     let cursor = Cursor::new(bytes);
 
@@ -161,7 +159,7 @@ fn load_app_icon() -> egui::IconData {
         }
     }
 
-    // Final fallback: a 1x1 transparent pixel to keep the ts
+    // Final fallback: a 1x1 transparent pixel to keep the icon
     egui::IconData { rgba: vec![0, 0, 0, 0], width: 1, height: 1 }
 }
 
@@ -174,7 +172,7 @@ fn main() -> eframe::Result<()> {
         ..Default::default()
     };
     eframe::run_native(
-        "Update Fucker",
+        "NoUpdater",
         native_options,
         Box::new(|_cc| Ok(Box::new(MyApp {
             windows_update_disabled: read_status(),

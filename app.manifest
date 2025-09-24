@@ -3,10 +3,10 @@
   <assemblyIdentity
     version="1.0.0.0"
     processorArchitecture="*"
-    name="updatefucker"
+    name="noupdater"
     type="win32"
   />
-  <description>UpdateFucker Application</description>
+  <description>NoUpdater Application</description>
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>

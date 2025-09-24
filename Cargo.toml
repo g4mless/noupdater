@@ -1,15 +1,15 @@
 [package]
-name = "updatefucker"
+name = "noupdater"
 version = "0.1.0"
 edition = "2024"
 
 [package.metadata.winres]
-OriginalFilename = "updatefucker.exe"
-FileDescription = "UpdateFucker Application"
-ProductName = "UpdateFucker"
+OriginalFilename = "noupdater.exe"
+FileDescription = "NoUpdater"
+ProductName = "NoUpdater"
 
 [dependencies]
-eframe = "0.32.1"
+eframe = "*"
 winreg = "0.55"
 ico = "0.4.0"
 
