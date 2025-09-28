@@ -91,11 +91,16 @@ impl eframe::App for MyApp {
             ui.add_space(8.0);
             ui.separator();
 
+            fn small_label(ui: &mut egui::Ui, text: &str) {
+            ui.label(egui::RichText::new(text).size(11.0));
+            }
+
             ui.label("This software does:");
-            ui.small("- Service disable (wuauserv, UsoSvc, WaaSMedicSvc, BITS, DoSvc)");
-            ui.small("- Corrupt wuauserv ImagePath");
-            ui.small("- Policies: NoAutoUpdate, WSUS redirection, block WU internet");
-            ui.small("- Disable Update Orchestrator and WaaS Medic tasks");
+            small_label(ui, "- Service disable (wuauserv, UsoSvc, WaaSMedicSvc, BITS, DoSvc)");
+            small_label(ui, "- Corrupt wuauserv ImagePath");
+            small_label(ui, "- Policies: NoAutoUpdate, WSUS redirection, block WU internet");
+            small_label(ui, "- Disable Update Orchestrator and WaaS Medic tasks");
+
 
             if !self.status_message.is_empty() {
                 ui.separator();
