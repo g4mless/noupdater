@@ -5,6 +5,7 @@ use winreg::enums::*;
 use winreg::RegKey;
 use std::io::Cursor;
 use ico::IconDir;
+use std::fs;
 use std::process::{Command, Stdio};
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -154,17 +155,19 @@ fn enforce_disable_all() -> bool {
 
 fn restore_all() -> bool {
     let policies_ok = set_policies_enable();
-
+    
+    let _ = refresh_group_policy();
+    
     let restore_ok = restore_wuauserv();
-
+    
     let _ = set_service_start(WUAUSERV, "demand");
     let _ = set_service_start(USOSVC, "demand");
     let _ = set_service_start(WAASMEDIC, "demand");
     let _ = set_service_start(BITS, "demand");
     let _ = set_service_start(DOSVC, "auto");
-
+    
     let _ = enable_update_tasks();
-
+    
     policies_ok && restore_ok
 }
 
@@ -195,22 +198,56 @@ fn set_policies_disable() -> bool {
 
 fn set_policies_enable() -> bool {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+
+    let _ = hklm.delete_subkey_all(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate");
+    let _ = hkcu.delete_subkey_all(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate");
+
+    if let Ok(store) = hklm.open_subkey_with_flags(r"SOFTWARE\Policies\Microsoft\WindowsStore", KEY_ALL_ACCESS) {
+        let _ = store.delete_value("RemoveWindowsStore");
+        let _ = store.delete_value("DisableStoreApps");
+        let _ = store.delete_value("AutoDownload");
+    }
+
     if let Ok(wu_root) = hklm.open_subkey_with_flags(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate", KEY_ALL_ACCESS) {
         let _ = wu_root.delete_value("WUServer");
         let _ = wu_root.delete_value("WUStatusServer");
         let _ = wu_root.set_value("DoNotConnectToWindowsUpdateInternetLocations", &0u32);
         let _ = wu_root.set_value("DisableDualScan", &0u32);
-        let _ = wu_root.delete_subkey("AU");
-    }
-    
-    if let Ok((wu_root, _)) = hklm.create_subkey(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate") {
-        if let Ok((au, _)) = wu_root.create_subkey("AU") {
+        let _ = wu_root.delete_value("DisableWindowsUpdateAccess");
+        let _ = wu_root.delete_value("SetDisableUXWUAccess");
+        if let Ok(au) = wu_root.open_subkey_with_flags("AU", KEY_ALL_ACCESS) {
             let _ = au.set_value("NoAutoUpdate", &0u32);
             let _ = au.set_value("UseWUServer", &0u32);
             let _ = au.delete_value("AUOptions");
         }
     }
     true
+}
+
+fn refresh_group_policy() -> bool {
+    let mut any = false;
+    if run_cmd_silent("gpupdate", &["/target:computer", "/force"]) {
+        any = true;
+    }
+    if run_cmd_silent("gpupdate", &["/target:user", "/force"]) {
+        any = true;
+    }
+    any
+}
+
+fn _purge_local_gpo_files() -> bool {
+    use std::path::Path;
+    let mut any = false;
+    let machine = r"C:\Windows\System32\GroupPolicy\Machine\Registry.pol";
+    let user = r"C:\Windows\System32\GroupPolicy\User\Registry.pol";
+    if Path::new(machine).exists() {
+        if fs::remove_file(machine).is_ok() { any = true; }
+    }
+    if Path::new(user).exists() {
+        if fs::remove_file(user).is_ok() { any = true; }
+    }
+    any
 }
 
 fn run_cmd_silent(program: &str, args: &[&str]) -> bool {
@@ -227,6 +264,10 @@ fn run_cmd_silent(program: &str, args: &[&str]) -> bool {
 
 fn stop_service(name: &str) -> bool {
     run_cmd_silent("sc", &["stop", name]) || run_cmd_silent("net", &["stop", name])
+}
+
+fn _start_service(name: &str) -> bool {
+    run_cmd_silent("sc", &["start", name]) || run_cmd_silent("net", &["start", name])
 }
 
 fn set_service_start(name: &str, mode: &str) -> bool {
