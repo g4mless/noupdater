@@ -42,10 +42,19 @@ impl eframe::App for MyApp {
                 }
 
                 // Draw the toggle switch background
+                let hovered = response.hovered();
                 let bg_color = if self.windows_update_disabled {
-                    egui::Color32::from_rgb(0, 99, 177) //blue disabled
+                    if hovered {
+                        egui::Color32::from_rgb(0, 79, 140) // darker blue when hovered
+                    } else {
+                        egui::Color32::from_rgb(0, 99, 177) // blue disabled
+                    }
                 } else {
-                    egui::Color32::from_rgb(220, 53, 69) //red running
+                    if hovered {
+                        egui::Color32::from_rgb(176, 42, 55) // darker red when hovered
+                    } else {
+                        egui::Color32::from_rgb(220, 53, 69) // red running
+                    }
                 };
 
                 ui.painter().rect_filled(rect, 12.5, bg_color);
