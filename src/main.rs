@@ -103,7 +103,6 @@ impl eframe::App for MyApp {
 
             ui.label("This software does:");
             small_label(ui, "- Service disable (wuauserv, UsoSvc, WaaSMedicSvc, BITS, DoSvc)");
-            small_label(ui, "- Corrupt wuauserv ImagePath");
             small_label(ui, "- Policies: NoAutoUpdate, WSUS redirection, block WU internet");
             small_label(ui, "- Disable Update Orchestrator and WaaS Medic tasks");
 
@@ -143,8 +142,6 @@ fn enforce_disable_all() -> bool {
     let _ = stop_service(BITS);
     let _ = stop_service(DOSVC);
 
-    let corrupt_ok = corrupt_wuauserv();
-
     let policies_ok = set_policies_disable();
 
     let _ = set_service_start(WUAUSERV, "disabled");
@@ -155,25 +152,23 @@ fn enforce_disable_all() -> bool {
 
     let _ = disable_update_tasks();
 
-    corrupt_ok || policies_ok
+    policies_ok
 }
 
 fn restore_all() -> bool {
     let policies_ok = set_policies_enable();
-    
+
     let _ = refresh_group_policy();
-    
-    let restore_ok = restore_wuauserv();
-    
+
     let _ = set_service_start(WUAUSERV, "demand");
     let _ = set_service_start(USOSVC, "demand");
     let _ = set_service_start(WAASMEDIC, "demand");
     let _ = set_service_start(BITS, "demand");
     let _ = set_service_start(DOSVC, "auto");
-    
+
     let _ = enable_update_tasks();
-    
-    policies_ok && restore_ok
+
+    policies_ok
 }
 
 fn set_policies_disable() -> bool {
@@ -275,29 +270,9 @@ fn set_service_start(name: &str, mode: &str) -> bool {
     run_cmd("sc", &["config", name, "start=", mode])
 }
 
-fn corrupt_wuauserv() -> bool {
-    let _ = stop_service(WUAUSERV);
 
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    if let Ok((key, _)) = hklm.create_subkey(r"SYSTEM\CurrentControlSet\Services\wuauserv") {
-        let new_path = r"C:\WINDOWS\system32\svchostt.exe -k netsvcs -p"; // intentionally wrong
-        let image_path_ok = key.set_value("ImagePath", &new_path).is_ok();
-        let start_value_ok = key.set_value("Start", &4u32).is_ok(); // disabled
-        return image_path_ok && start_value_ok;
-    }
-    false
-}
 
-fn restore_wuauserv() -> bool {
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    if let Ok((key, _)) = hklm.create_subkey(r"SYSTEM\CurrentControlSet\Services\wuauserv") {
-        let original_path = r"C:\WINDOWS\system32\svchost.exe -k netsvcs -p";
-        let image_path_ok = key.set_value("ImagePath", &original_path).is_ok();
-        let start_value_ok = key.set_value("Start", &3u32).is_ok(); // demand
-        return image_path_ok && start_value_ok;
-    }
-    false
-}
+
 
 fn disable_update_tasks() -> bool {
     let tasks = [
@@ -344,9 +319,7 @@ fn enable_update_tasks() -> bool {
 }
 
 fn read_status() -> bool {
-    let policy_disabled = read_policy_no_auto_update();
-    let wuauserv_disabled = read_wuauserv_is_corrupted_or_disabled();
-    policy_disabled || wuauserv_disabled
+    read_policy_no_auto_update()
 }
 
 fn read_policy_no_auto_update() -> bool {
@@ -359,21 +332,7 @@ fn read_policy_no_auto_update() -> bool {
     false
 }
 
-fn read_wuauserv_is_corrupted_or_disabled() -> bool {
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    if let Ok(key) = hklm.open_subkey(r"SYSTEM\CurrentControlSet\Services\wuauserv") {
-        let path_is_corrupt = key
-            .get_value::<String, _>("ImagePath")
-            .map(|p| !p.to_ascii_lowercase().contains("svchost.exe"))
-            .unwrap_or(false);
-        let start_is_disabled = key
-            .get_value::<u32, _>("Start")
-            .map(|v| v == 4)
-            .unwrap_or(false);
-        return path_is_corrupt || start_is_disabled;
-    }
-    false
-}
+
 
 fn load_app_icon() -> egui::IconData {
     let bytes: &[u8] = include_bytes!("../icon.ico");
