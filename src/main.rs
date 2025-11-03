@@ -7,10 +7,6 @@ use std::io::Cursor;
 use ico::IconDir;
 use std::fs;
 use std::process::{Command, Stdio};
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
-
-const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 const WUAUSERV: &str = "wuauserv";
 const USOSVC: &str = "UsoSvc";
@@ -236,10 +232,10 @@ fn set_policies_enable() -> bool {
 
 fn refresh_group_policy() -> bool {
     let mut any = false;
-    if run_cmd_silent("gpupdate", &["/target:computer", "/force"]) {
+    if run_cmd("gpupdate", &["/target:computer", "/force"]) {
         any = true;
     }
-    if run_cmd_silent("gpupdate", &["/target:user", "/force"]) {
+    if run_cmd("gpupdate", &["/target:user", "/force"]) {
         any = true;
     }
     any
@@ -259,28 +255,24 @@ fn _purge_local_gpo_files() -> bool {
     any
 }
 
-fn run_cmd_silent(program: &str, args: &[&str]) -> bool {
+fn run_cmd(program: &str, args: &[&str]) -> bool {
     let mut cmd = Command::new(program);
     cmd.args(args)
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    #[cfg(windows)]
-    {
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
     cmd.status().map(|s| s.success()).unwrap_or(false)
 }
 
 fn stop_service(name: &str) -> bool {
-    run_cmd_silent("sc", &["stop", name]) || run_cmd_silent("net", &["stop", name])
+    run_cmd("sc", &["stop", name]) || run_cmd("net", &["stop", name])
 }
 
 fn _start_service(name: &str) -> bool {
-    run_cmd_silent("sc", &["start", name]) || run_cmd_silent("net", &["start", name])
+    run_cmd("sc", &["start", name]) || run_cmd("net", &["start", name])
 }
 
 fn set_service_start(name: &str, mode: &str) -> bool {
-    run_cmd_silent("sc", &["config", name, "start=", mode])
+    run_cmd("sc", &["config", name, "start=", mode])
 }
 
 fn corrupt_wuauserv() -> bool {
@@ -322,7 +314,7 @@ fn disable_update_tasks() -> bool {
     ];
     let mut any = false;
     for t in tasks {
-        if run_cmd_silent("schtasks", &["/Change", "/TN", t, "/DISABLE"]) {
+        if run_cmd("schtasks", &["/Change", "/TN", t, "/DISABLE"]) {
             any = true;
         }
     }
@@ -344,7 +336,7 @@ fn enable_update_tasks() -> bool {
     ];
     let mut any = false;
     for t in tasks {
-        if run_cmd_silent("schtasks", &["/Change", "/TN", t, "/ENABLE"]) {
+        if run_cmd("schtasks", &["/Change", "/TN", t, "/ENABLE"]) {
             any = true;
         }
     }
