@@ -5,14 +5,17 @@ use winreg::enums::*;
 use winreg::RegKey;
 use std::io::Cursor;
 use ico::IconDir;
-use std::fs;
 use std::process::{Command, Stdio};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
-const WUAUSERV: &str = "wuauserv";
-const USOSVC: &str = "UsoSvc";
-const WAASMEDIC: &str = "WaaSMedicSvc";
-const BITS: &str = "BITS";
-const DOSVC: &str = "DoSvc";
+fn get_disable_script() -> &'static str {
+    include_str!("../disable.ps1")
+}
+
+fn get_enable_script() -> &'static str {
+    include_str!("../enable.ps1")
+}
 
 
 struct MyApp {
@@ -136,187 +139,26 @@ fn main() -> eframe::Result<()> {
 
 
 fn enforce_disable_all() -> bool {
-    let _ = stop_service(WUAUSERV);
-    let _ = stop_service(USOSVC);
-    let _ = stop_service(WAASMEDIC);
-    let _ = stop_service(BITS);
-    let _ = stop_service(DOSVC);
-
-    let policies_ok = set_policies_disable();
-
-    let _ = set_service_start(WUAUSERV, "disabled");
-    let _ = set_service_start(USOSVC, "disabled");
-    let _ = set_service_start(WAASMEDIC, "disabled");
-    let _ = set_service_start(BITS, "disabled");
-    let _ = set_service_start(DOSVC, "disabled");
-
-    let _ = disable_update_tasks();
-
-    policies_ok
+    run_powershell_script(get_disable_script())
 }
 
 fn restore_all() -> bool {
-    let policies_ok = set_policies_enable();
-
-    let _ = refresh_group_policy();
-
-    let _ = set_service_start(WUAUSERV, "demand");
-    let _ = set_service_start(USOSVC, "demand");
-    let _ = set_service_start(WAASMEDIC, "demand");
-    let _ = set_service_start(BITS, "demand");
-    let _ = set_service_start(DOSVC, "auto");
-
-    let _ = enable_update_tasks();
-
-    policies_ok
-}
-
-fn set_policies_disable() -> bool {
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    let (wu_root, _) = match hklm.create_subkey(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate") {
-        Ok(x) => x,
-        Err(_) => return false,
-    };
-    let (au, _) = match wu_root.create_subkey("AU") {
-        Ok(x) => x,
-        Err(_) => return false,
-    };
-
-    let mut ok = true;
-    ok &= au.set_value("NoAutoUpdate", &1u32).is_ok();
-    ok &= au.set_value("AUOptions", &1u32).is_ok();
-
-    // WSUS redirection
-    ok &= wu_root.set_value("WUServer", &"http://127.0.0.1").is_ok();
-    ok &= wu_root.set_value("WUStatusServer", &"http://127.0.0.1").is_ok();
-    ok &= wu_root.set_value("DoNotConnectToWindowsUpdateInternetLocations", &1u32).is_ok();
-    ok &= wu_root.set_value("DisableDualScan", &1u32).is_ok();
-    ok &= au.set_value("UseWUServer", &1u32).is_ok();
-
-    ok
-}
-
-fn set_policies_enable() -> bool {
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-
-    let _ = hklm.delete_subkey_all(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate");
-    let _ = hkcu.delete_subkey_all(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate");
-
-    if let Ok(store) = hklm.open_subkey_with_flags(r"SOFTWARE\Policies\Microsoft\WindowsStore", KEY_ALL_ACCESS) {
-        let _ = store.delete_value("RemoveWindowsStore");
-        let _ = store.delete_value("DisableStoreApps");
-        let _ = store.delete_value("AutoDownload");
-    }
-
-    if let Ok(wu_root) = hklm.open_subkey_with_flags(r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate", KEY_ALL_ACCESS) {
-        let _ = wu_root.delete_value("WUServer");
-        let _ = wu_root.delete_value("WUStatusServer");
-        let _ = wu_root.set_value("DoNotConnectToWindowsUpdateInternetLocations", &0u32);
-        let _ = wu_root.set_value("DisableDualScan", &0u32);
-        let _ = wu_root.delete_value("DisableWindowsUpdateAccess");
-        let _ = wu_root.delete_value("SetDisableUXWUAccess");
-        if let Ok(au) = wu_root.open_subkey_with_flags("AU", KEY_ALL_ACCESS) {
-            let _ = au.set_value("NoAutoUpdate", &0u32);
-            let _ = au.set_value("UseWUServer", &0u32);
-            let _ = au.delete_value("AUOptions");
-        }
-    }
-    true
-}
-
-fn refresh_group_policy() -> bool {
-    let mut any = false;
-    if run_cmd("gpupdate", &["/target:computer", "/force"]) {
-        any = true;
-    }
-    if run_cmd("gpupdate", &["/target:user", "/force"]) {
-        any = true;
-    }
-    any
-}
-
-fn _purge_local_gpo_files() -> bool {
-    use std::path::Path;
-    let mut any = false;
-    let machine = r"C:\Windows\System32\GroupPolicy\Machine\Registry.pol";
-    let user = r"C:\Windows\System32\GroupPolicy\User\Registry.pol";
-    if Path::new(machine).exists() {
-        if fs::remove_file(machine).is_ok() { any = true; }
-    }
-    if Path::new(user).exists() {
-        if fs::remove_file(user).is_ok() { any = true; }
-    }
-    any
-}
-
-fn run_cmd(program: &str, args: &[&str]) -> bool {
-    let mut cmd = Command::new(program);
-    cmd.args(args)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    cmd.status().map(|s| s.success()).unwrap_or(false)
-}
-
-fn stop_service(name: &str) -> bool {
-    run_cmd("sc", &["stop", name]) || run_cmd("net", &["stop", name])
-}
-
-fn _start_service(name: &str) -> bool {
-    run_cmd("sc", &["start", name]) || run_cmd("net", &["start", name])
-}
-
-fn set_service_start(name: &str, mode: &str) -> bool {
-    run_cmd("sc", &["config", name, "start=", mode])
+    run_powershell_script(get_enable_script())
 }
 
 
 
 
 
-fn disable_update_tasks() -> bool {
-    let tasks = [
-        r"\Microsoft\Windows\WindowsUpdate\Scheduled Start",
-        r"\Microsoft\Windows\WindowsUpdate\AUScheduledInstall",
-        r"\Microsoft\Windows\WindowsUpdate\Automatic App Update",
-        r"\Microsoft\Windows\WindowsUpdate\Scheduled Start With Network",
-        r"\Microsoft\Windows\WindowsUpdate\UPR",
-        r"\Microsoft\Windows\UpdateOrchestrator\Schedule Scan",
-        r"\Microsoft\Windows\UpdateOrchestrator\Schedule Scan Static Task",
-        r"\Microsoft\Windows\UpdateOrchestrator\USO_UxBroker_Display",
-        r"\Microsoft\Windows\UpdateOrchestrator\UpdateModelTask",
-        r"\Microsoft\Windows\WaaSMedic\PerformRemediation",
-    ];
-    let mut any = false;
-    for t in tasks {
-        if run_cmd("schtasks", &["/Change", "/TN", t, "/DISABLE"]) {
-            any = true;
-        }
-    }
-    any
-}
 
-fn enable_update_tasks() -> bool {
-    let tasks = [
-        r"\Microsoft\Windows\WindowsUpdate\Scheduled Start",
-        r"\Microsoft\Windows\WindowsUpdate\AUScheduledInstall",
-        r"\Microsoft\Windows\WindowsUpdate\Automatic App Update",
-        r"\Microsoft\Windows\WindowsUpdate\Scheduled Start With Network",
-        r"\Microsoft\Windows\WindowsUpdate\UPR",
-        r"\Microsoft\Windows\UpdateOrchestrator\Schedule Scan",
-        r"\Microsoft\Windows\UpdateOrchestrator\Schedule Scan Static Task",
-        r"\Microsoft\Windows\UpdateOrchestrator\USO_UxBroker_Display",
-        r"\Microsoft\Windows\UpdateOrchestrator\UpdateModelTask",
-        r"\Microsoft\Windows\WaaSMedic\PerformRemediation",
-    ];
-    let mut any = false;
-    for t in tasks {
-        if run_cmd("schtasks", &["/Change", "/TN", t, "/ENABLE"]) {
-            any = true;
-        }
-    }
-    any
-}
+
+
+
+
+
+
+
+
 
 fn read_status() -> bool {
     read_policy_no_auto_update()
@@ -333,6 +175,21 @@ fn read_policy_no_auto_update() -> bool {
 }
 
 
+
+fn run_powershell_script(script: &str) -> bool {
+    let mut cmd = Command::new("powershell");
+    cmd.arg("-ExecutionPolicy")
+        .arg("Bypass")
+        .arg("-Command")
+        .arg(script)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    cmd.status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
 
 fn load_app_icon() -> egui::IconData {
     let bytes: &[u8] = include_bytes!("../icon.ico");
