@@ -9,6 +9,5 @@ this project is partially vibe-coded, btw. i leave gpt & claude to create the ui
 
 ## What my software does?
 - Disable services that related to windows update (wuauserv, UsoSvc, WaaSMedicSvc, BITS, DoSvc)
-- Corrupt a.k.a changing wuauserv ImagePath to make the windows service can't start the service.
 - Add some Policies like NoAutoUpdate, WSUS redirection, block WU internet
 - Lastly, Disable Update Orchestrator and WaaS Medic tasks
